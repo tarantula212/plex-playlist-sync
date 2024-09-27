@@ -42,7 +42,7 @@ def _get_sp_user_playlists(
     return playlists
 
 def _cleanup_title(title: str) -> str:
-    title_match = re.search(r'^(.*?) \(From', title)
+    title_match = re.search(r'^(.*?) \(From| - From| \(from the Netflix Film', title)  # Updated regex to handle both cases
     return title_match.group(1).strip() if title_match else title
 
 def _cleanup_album_name(album: str) -> str:
