@@ -46,7 +46,7 @@ def _cleanup_title(title: str) -> str:
     return title_match.group(1).strip() if title_match else title
 
 def _cleanup_album_name(album: str) -> str:
-    album_match = re.search(r'\(From "(.*?)"\)', album)
+    album_match = re.search(r'\(From "(.*?)"\)| - From "(.*?)"', album)  # Updated regex to handle both cases
     return album_match.group(1) if album_match else album
 
 
