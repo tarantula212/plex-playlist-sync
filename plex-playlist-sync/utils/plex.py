@@ -1,4 +1,5 @@
 import csv
+import re
 import logging
 import pathlib
 import sys
@@ -48,6 +49,26 @@ def _delete_csv(name: str, path: str = "/data") -> None:
     file = data_folder / f"{name}.csv"
     file.unlink()
 
+def _clean_album_name(album: str) -> str:
+    """Clean the album name by removing specified phrases in any case and bracketed."""
+
+    # Remove phrases
+    phrases_to_remove = [
+        'original motion picture soundtrack',
+        'deluxe edition',
+    ]  
+    for phrase in phrases_to_remove:
+        album = re.sub(r'\(?\s*' + re.escape(phrase) + r'\s*\)?', '', album, flags=re.IGNORECASE).strip()
+
+    # Replace words
+    words_to_replace = [
+        ['&', 'And'],
+    ]
+    for word_pair in words_to_replace:  # Changed variable name for clarity
+        album = album.replace(word_pair[0], word_pair[1])
+
+    return album
+
 
 def _get_available_plex_tracks(plex: PlexServer, tracks: List[Track]) -> List:
     """Search and return list of tracks available in plex.
@@ -65,16 +86,17 @@ def _get_available_plex_tracks(plex: PlexServer, tracks: List[Track]) -> List:
         try:
             search = plex.search(track.title, mediatype="track", limit=5)
         except BadRequest:
-            logging.info("failed to search %s on plex", track.title)
+            logging.info("failed to search title '%s' on plex", track.title)
         if (not search) or len(track.title.split("(")) > 1:
-            logging.info("retrying search for %s", track.title)
+            cleaned_title = track.title.split("(")[0].strip()
+            logging.info("retrying search with title (cleaned) '%s'", cleaned_title)
             try:
                 search += plex.search(
-                    track.title.split("(")[0], mediatype="track", limit=5
+                    cleaned_title, mediatype="track", limit=5
                 )
-                logging.info("search for %s successful", track.title)
+                logging.info("search for %s successful", cleaned_title)
             except BadRequest:
-                logging.info("unable to query %s on plex", track.title)
+                logging.info("failed to search for title (cleaned) '%s' on plex", cleaned_title)
 
         found = False
         if search:
@@ -90,7 +112,7 @@ def _get_available_plex_tracks(plex: PlexServer, tracks: List[Track]) -> List:
                         break
 
                     album_similarity = SequenceMatcher(
-                        None, s.album().title.lower(), track.album.lower()
+                        None, _clean_album_name(s.album().title).lower(), _clean_album_name(track.album).lower()
                     ).quick_ratio()
 
                     if album_similarity >= 0.9:
