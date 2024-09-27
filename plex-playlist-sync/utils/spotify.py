@@ -1,4 +1,5 @@
 import logging
+import re
 from typing import List
 
 import spotipy
@@ -40,6 +41,14 @@ def _get_sp_user_playlists(
         logging.error("Spotify User ID Error")
     return playlists
 
+def _cleanup_title(title: str) -> str:
+    title_match = re.search(r'^(.*?) \(From', title)
+    return title_match.group(1).strip() if title_match else title
+
+def _cleanup_album_name(album: str) -> str:
+    album_match = re.search(r'\(From "(.*?)"\)', album)
+    return album_match.group(1) if album_match else album
+
 
 def _get_sp_tracks_from_playlist(
     sp: spotipy.Spotify, user_id: str, playlist: Playlist
@@ -55,11 +64,18 @@ def _get_sp_tracks_from_playlist(
     """
 
     def extract_sp_track_metadata(track) -> Track:
-        title = track["track"]["name"]
+        # Title
+        title = _cleanup_title(track["track"]["name"])
+
+        # Artist
         artist = track["track"]["artists"][0]["name"]
-        album = track["track"]["album"]["name"]
+
+        # Album
+        album = _cleanup_album_name(track["track"]["album"]["name"])
+
         # Tracks may no longer be on spotify in such cases return ""
         url = track["track"]["external_urls"].get("spotify", "")
+
         return Track(title, artist, album, url)
 
     sp_playlist_tracks = sp.user_playlist_tracks(user_id, playlist.id)
