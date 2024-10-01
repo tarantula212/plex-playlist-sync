@@ -119,6 +119,8 @@ def spotify_playlist_sync(
     )
     if playlists:
         for playlist in playlists:
+            # if not playlist.name.startswith("Bollywood & Chill"):
+            #     continue
             tracks = _get_sp_tracks_from_playlist(
                 sp, userInputs.spotify_user_id, playlist
             )

@@ -56,7 +56,7 @@ def _clean_album_name(album: str) -> str:
     phrases_to_remove = [
         'original motion picture soundtrack',
         'deluxe edition',
-    ]  
+    ]
     for phrase in phrases_to_remove:
         album = re.sub(r'\(?\s*' + re.escape(phrase) + r'\s*\)?', '', album, flags=re.IGNORECASE).strip()
 
@@ -180,6 +180,90 @@ def update_or_create_plex_playlist(
         playlist (Playlist): Playlist object
     """
     available_tracks, missing_tracks = _get_available_plex_tracks(plex, tracks)
+    logging.info("(Total: %d, Missing: %d)", len(tracks), len(missing_tracks))
+
+    admin_user = plex.myPlexAccount().username
+
+    # sync playlist for admin_user
+    logging.info("Syncing Playlist for user %s", admin_user)
+    _update_or_create_user_plex_playlist(
+        plex,
+        playlist,
+        available_tracks,
+        missing_tracks,
+        userInputs,
+    )
+
+    # sync playlist for other users
+    users = _get_users_list(plex, userInputs.plex_users)
+    for user in users:
+        if user == admin_user: # already synced before
+            continue
+
+        logging.info("Syncing Playlist for user %s", user)
+
+        try:
+            user_plex = plex.switchUser(user)
+            _update_or_create_user_plex_playlist(
+                user_plex,
+                playlist,
+                available_tracks,
+                missing_tracks,
+                userInputs,
+            )
+        except Exception as e:
+            logging.info("Error while sync Playlist %s", e)
+
+    if missing_tracks and userInputs.write_missing_as_csv:
+        try:
+            _write_csv(missing_tracks, playlist.name)
+            logging.info("Missing tracks written to %s.csv", playlist.name)
+        except:
+            logging.info(
+                "Failed to write missing tracks for %s, likely permission"
+                " issue",
+                playlist.name,
+            )
+    if (not missing_tracks) and userInputs.write_missing_as_csv:
+        try:
+            # Delete playlist created in prev run if no tracks are missing now
+            _delete_csv(playlist.name)
+            logging.info("Deleted old %s.csv", playlist.name)
+        except:
+            logging.info(
+                "Failed to delete %s.csv, likely permission issue",
+                playlist.name,
+            )
+
+def _get_users_list(plex: PlexServer, users: str) -> List[str]:
+    """Get list of users from Plex.
+
+    Args:
+        plex (PlexServer): A configured PlexServer instance
+        users (str): comma separated list of users
+
+    Returns:
+        List[str]: list of users
+    """
+    account = plex.myPlexAccount()
+    users_list = []
+    input_users = users.split(',')
+    if 'all' in input_users:
+        for user in account.users():
+            users_list.append(user.username)
+    else:
+        for user in input_users:
+            users_list.append(user)
+
+    return users_list
+
+def _update_or_create_user_plex_playlist(
+    plex: PlexServer,
+    playlist: Playlist,
+    available_tracks: List[Track],
+    missing_tracks: List[Track],
+    userInputs: UserInputs,
+) -> None:
     if available_tracks:
         try:
             plex_playlist = _update_plex_playlist(
@@ -219,23 +303,4 @@ def update_or_create_plex_playlist(
             " playlist creation",
             playlist.name,
         )
-    if missing_tracks and userInputs.write_missing_as_csv:
-        try:
-            _write_csv(missing_tracks, playlist.name)
-            logging.info("Missing tracks written to %s.csv", playlist.name)
-        except:
-            logging.info(
-                "Failed to write missing tracks for %s, likely permission"
-                " issue",
-                playlist.name,
-            )
-    if (not missing_tracks) and userInputs.write_missing_as_csv:
-        try:
-            # Delete playlist created in prev run if no tracks are missing now
-            _delete_csv(playlist.name)
-            logging.info("Deleted old %s.csv", playlist.name)
-        except:
-            logging.info(
-                "Failed to delete %s.csv, likely permission issue",
-                playlist.name,
-            )
+

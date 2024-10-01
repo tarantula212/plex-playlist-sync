@@ -15,6 +15,7 @@ from utils.spotify import spotify_playlist_sync
 userInputs = UserInputs(
     plex_url=os.getenv("PLEX_URL"),
     plex_token=os.getenv("PLEX_TOKEN"),
+    plex_users=os.getenv("PLEX_USERS", ""), # comma separated list of users
     write_missing_as_csv=os.getenv("WRITE_MISSING_AS_CSV", "0") == "1",
     append_service_suffix=os.getenv("APPEND_SERVICE_SUFFIX", "1") == "1",
     add_playlist_poster=os.getenv("ADD_PLAYLIST_POSTER", "1") == "1",

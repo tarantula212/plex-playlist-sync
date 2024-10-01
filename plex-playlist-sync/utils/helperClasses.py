@@ -1,6 +1,5 @@
 from dataclasses import dataclass
 
-
 @dataclass
 class Track:
     title: str
@@ -21,6 +20,7 @@ class Playlist:
 class UserInputs:
     plex_url: str
     plex_token: str
+    plex_users: str
 
     write_missing_as_csv: bool
     append_service_suffix: bool
