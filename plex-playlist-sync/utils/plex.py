@@ -63,9 +63,12 @@ def _clean_album_name(album: str) -> str:
     # Replace words
     words_to_replace = [
         ['&', 'And'],
+        ['-', ''],
+        ['(', ''],
+        [')', ''],
     ]
     for word_pair in words_to_replace:  # Changed variable name for clarity
-        album = album.replace(word_pair[0], word_pair[1])
+        album = album.replace(word_pair[0], word_pair[1]).strip()
 
     return album
 
@@ -81,8 +84,8 @@ def _get_available_plex_tracks(plex: PlexServer, tracks: List[Track]) -> List:
         List: of plex track objects
     """
     plex_tracks, missing_tracks = [], []
-    for track in tracks:
-        search = []
+    for count, track in enumerate(tracks, start=1):  # Added count
+        logging.info("Processing track %d of %d: %s (Album: %s)", count, len(tracks), track.title, track.album)  # Log the track title and count
         try:
             search = plex.search(track.title, mediatype="track", limit=5)
         except BadRequest:
@@ -105,17 +108,23 @@ def _get_available_plex_tracks(plex: PlexServer, tracks: List[Track]) -> List:
                     artist_similarity = SequenceMatcher(
                         None, s.artist().title.lower(), track.artist.lower()
                     ).quick_ratio()
+                    logging.info("=> Artist Similarity - (Plex: %s, Track: %s) - %f", s.artist().title, track.artist, artist_similarity)
 
                     if artist_similarity >= 0.9:
+                        logging.info("++++++ Adding Track: %s", track.title)
                         plex_tracks.extend(s)
                         found = True
                         break
 
+                    plex_album_name = _clean_album_name(s.album().title)
+                    track_album_name = _clean_album_name(track.album)
                     album_similarity = SequenceMatcher(
-                        None, _clean_album_name(s.album().title).lower(), _clean_album_name(track.album).lower()
+                        None, plex_album_name.lower(), track_album_name.lower()
                     ).quick_ratio()
+                    logging.info("=> Album Similarity - (Plex: %s, Track: %s) - %f", plex_album_name, track_album_name, album_similarity)
 
                     if album_similarity >= 0.9:
+                        logging.info("++++++++ Adding Track: %s", track.title)
                         plex_tracks.extend(s)
                         found = True
                         break
@@ -127,6 +136,7 @@ def _get_available_plex_tracks(plex: PlexServer, tracks: List[Track]) -> List:
                         track.title,
                     )
         if not found:
+            logging.error("Missing: %s (Album: '%s')", track.title, track.album)
             missing_tracks.append(track)
 
     return plex_tracks, missing_tracks
