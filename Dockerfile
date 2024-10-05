@@ -1,4 +1,4 @@
-FROM python:3.10-alpine
+FROM spotdl/spotify-downloader:latest
 
 ENV PYTHONUNBUFFERED 1
 
@@ -10,6 +10,6 @@ RUN pip install -r requirements.txt
 COPY . .
 WORKDIR /app
 
-CMD ["python", "./plex-playlist-sync/run.py"]
+ENTRYPOINT ["python", "./plex-playlist-sync/run.py"]
 
 # docker buildx build --platform linux/amd64,linux/arm64,linux/arm/v7 -t rnagabhyrava/plexplaylistsync:<tag> --push .

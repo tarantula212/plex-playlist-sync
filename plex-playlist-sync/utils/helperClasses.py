@@ -22,6 +22,10 @@ class UserInputs:
     plex_token: str
     plex_users: str
 
+    download_missing_tracks: bool
+    download_missing_tracks_dir: str
+    spotdl_dir: str
+
     write_missing_as_csv: bool
     append_service_suffix: bool
     add_playlist_poster: bool

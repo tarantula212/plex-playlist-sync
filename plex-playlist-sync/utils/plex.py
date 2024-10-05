@@ -9,13 +9,45 @@ from typing import List
 import plexapi
 from plexapi.exceptions import BadRequest, NotFound
 from plexapi.server import PlexServer
+from spotdl import Spotdl
+from spotdl.types.options import DownloaderOptions, SpotifyOptions
+import json
+import os
 
 from .helperClasses import Playlist, Track, UserInputs
 
 logging.basicConfig(stream=sys.stdout, level=logging.INFO)
 
+def get_config(config_path: str):
+    with open(config_path, "r", encoding="utf-8") as config_file:
+        return json.load(config_file)
 
-def _write_csv(tracks: List[Track], name: str, path: str = "/data") -> None:
+def _download_missing_tracks(tracks: List[Track], userInputs: UserInputs):
+    spotdl_dir = userInputs.spotdl_dir
+    config = get_config(os.path.join(spotdl_dir, "config.json"))
+    spotifyOptions = SpotifyOptions(**config, cache_path=os.path.join(spotdl_dir, ".spotify"))
+    config["output"] = os.path.join(userInputs.download_missing_tracks_dir, config["output"])
+    downloaderOptions = DownloaderOptions(
+        **config,
+        cookie_file=os.path.join(spotdl_dir, "youtube_cookies.txt"),
+    )
+    spotdl = Spotdl(
+        client_id=spotifyOptions["client_id"],
+        client_secret=spotifyOptions["client_secret"],
+        cache_path=spotifyOptions["cache_path"],
+        downloader_settings=downloaderOptions
+    )
+
+    query = []
+    for track in tracks:
+        query.append(track.url)
+
+    songs = spotdl.search(query)
+    result = spotdl.download_songs(songs)
+    print(result)
+
+
+def _write_csv(tracks: List[Track], name: str, path: str = "/config/data") -> None:
     """Write given tracks with given name as a csv.
 
     Args:
@@ -38,7 +70,7 @@ def _write_csv(tracks: List[Track], name: str, path: str = "/data") -> None:
             )
 
 
-def _delete_csv(name: str, path: str = "/data") -> None:
+def _delete_csv(name: str, path: str = "/config/data") -> None:
     """Delete file associated with given name
 
     Args:
@@ -201,7 +233,6 @@ def update_or_create_plex_playlist(
             continue
 
         logging.info("Syncing Playlist for user %s", user)
-
         try:
             user_plex = plex.switchUser(user)
             _update_or_create_user_plex_playlist(
@@ -213,6 +244,14 @@ def update_or_create_plex_playlist(
             )
         except Exception as e:
             logging.info("Error while sync Playlist %s", e)
+
+    if missing_tracks and userInputs.download_missing_tracks:
+        try:
+            _download_missing_tracks(missing_tracks, userInputs)
+            logging.info("Missing tracks download to %s", playlist.name)
+        except Exception as e:
+            logging.error("Failed to download missing tracks %s", e)
+
 
     if missing_tracks and userInputs.write_missing_as_csv:
         try:
