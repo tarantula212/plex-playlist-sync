@@ -8,6 +8,8 @@ from plexapi.server import PlexServer
 from .helperClasses import Playlist, Track, UserInputs
 from .plex import update_or_create_plex_playlist
 
+from .spotdl import SpotDL
+
 
 def _get_sp_user_playlists(
     sp: spotipy.Spotify, user_id: str, suffix: str = " - Spotify"
@@ -47,7 +49,7 @@ def _cleanup_title(title: str) -> str:
 
 def _cleanup_album_name(album: str) -> str:
     album_match = re.search(r'\(From "(.*?)"\)| - From "(.*?)"', album, re.IGNORECASE)  # Updated regex to handle both cases
-    return album_match.group(1) if album_match else album
+    return (album_match.group(1) or album_match.group(2)) if album_match else album
 
 
 def _get_sp_tracks_from_playlist(
@@ -65,18 +67,20 @@ def _get_sp_tracks_from_playlist(
 
     def extract_sp_track_metadata(track) -> Track:
         # Title
-        title = _cleanup_title(track["track"]["name"])
+        original_title = track["track"]["name"]
+        title = _cleanup_title(original_title)
 
         # Artist
         artist = track["track"]["artists"][0]["name"]
 
         # Album
-        album = _cleanup_album_name(track["track"]["album"]["name"])
+        original_album = track["track"]["album"]["name"]
+        album = _cleanup_album_name(original_album)
 
         # Tracks may no longer be on spotify in such cases return ""
         url = track["track"]["external_urls"].get("spotify", "")
 
-        return Track(title, artist, album, url)
+        return Track(title, original_title, artist, album, original_album, url)
 
     sp_playlist_tracks = sp.user_playlist_tracks(user_id, playlist.id)
 
@@ -117,13 +121,19 @@ def spotify_playlist_sync(
         userInputs.spotify_user_id,
         " - Spotify" if userInputs.append_service_suffix else "",
     )
+
+    spotdl = SpotDL(userInputs.spotdl_dir, userInputs.download_missing_tracks_dir)
+
     if playlists:
         for playlist in playlists:
-            # if not playlist.name.startswith("Bollywood & Chill"):
-            #     continue
+            if not playlist.name in ["Top 50 - India - Spotify", "Hot Hits Hindi - Spotify"]:
+                continue
             tracks = _get_sp_tracks_from_playlist(
                 sp, userInputs.spotify_user_id, playlist
             )
-            update_or_create_plex_playlist(plex, playlist, tracks, userInputs)
+            missing_tracks = update_or_create_plex_playlist(plex, playlist, tracks, userInputs)
+            if missing_tracks and userInputs.download_missing_tracks:
+                spotdl.download_tracks(missing_tracks)
+
     else:
         logging.error("No spotify playlists found for given user")

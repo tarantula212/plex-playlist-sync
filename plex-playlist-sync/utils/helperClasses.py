@@ -3,8 +3,10 @@ from dataclasses import dataclass
 @dataclass
 class Track:
     title: str
+    original_title: str
     artist: str
     album: str
+    original_album: str
     url: str
 
 
