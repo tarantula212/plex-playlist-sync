@@ -44,11 +44,11 @@ def _get_sp_user_playlists(
     return playlists
 
 def _cleanup_title(title: str) -> str:
-    title_match = re.search(r'^(.*?) (?:\(From| - From)', title, re.IGNORECASE)  
+    title_match = re.search(r'^(.*?) (?:\(From|- From|\(Feat\.)', title, re.IGNORECASE)  
     return title_match.group(1).strip() if title_match else title
 
 def _cleanup_album_name(album: str) -> str:
-    album_match = re.search(r'\(From "(.*?)"\)| - From "(.*?)"', album, re.IGNORECASE)  # Updated regex to handle both cases
+    album_match = re.search(r'\(From "(.*?)"\)|- From "(.*?)"', album, re.IGNORECASE)  # Updated regex to handle both cases
     return (album_match.group(1) or album_match.group(2)) if album_match else album
 
 
@@ -123,10 +123,17 @@ def spotify_playlist_sync(
     )
 
     spotdl = SpotDL(userInputs.spotdl_dir, userInputs.download_missing_tracks_dir)
+    playlists_filter = [
+        "Top 50 - India - Spotify", 
+        "Hot Hits Hindi - Spotify", 
+        "Trending Now India - Spotify",
+        "Discover Weekly - Spotify"
+    ]
 
+    downloaded = False
     if playlists:
         for playlist in playlists:
-            if not playlist.name in ["Top 50 - India - Spotify", "Hot Hits Hindi - Spotify"]:
+            if playlist.name not in playlists_filter:
                 continue
             tracks = _get_sp_tracks_from_playlist(
                 sp, userInputs.spotify_user_id, playlist
@@ -134,6 +141,14 @@ def spotify_playlist_sync(
             missing_tracks = update_or_create_plex_playlist(plex, playlist, tracks, userInputs)
             if missing_tracks and userInputs.download_missing_tracks:
                 spotdl.download_tracks(missing_tracks)
+                downloaded = True
+
+        # refresh plex to scan for downloaded tracks
+        if downloaded:
+            librarySection = plex.library.section("Music")
+            # scan for new media
+            librarySection.update()
+
 
     else:
         logging.error("No spotify playlists found for given user")
