@@ -1,14 +1,11 @@
 FROM spotdl/spotify-downloader:latest
 
-ENV PYTHONUNBUFFERED 1
+ENV PYTHONUNBUFFERED=1
 
 WORKDIR /app
-
-COPY requirements.txt requirements.txt
-RUN pip install -r requirements.txt
 
 COPY . .
-WORKDIR /app
+RUN pip install -r requirements.txt
 
 ENTRYPOINT ["python", "./plex-playlist-sync/run.py"]
 

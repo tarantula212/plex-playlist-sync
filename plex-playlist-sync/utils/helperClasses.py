@@ -1,4 +1,6 @@
 from dataclasses import dataclass
+from typing import List
+
 
 @dataclass
 class Track:
@@ -20,9 +22,11 @@ class Playlist:
 
 @dataclass
 class UserInputs:
+    config_dir: str
+
     plex_url: str
     plex_token: str
-    plex_users: str
+    plex_users: List[str]
 
     download_missing_tracks: bool
     download_missing_tracks_dir: str
@@ -38,6 +42,7 @@ class UserInputs:
     spotipy_client_id: str
     spotipy_client_secret: str
     spotify_user_id: str
+    spotify_playlist_ids: List[str]
 
-    deezer_user_id: str
-    deezer_playlist_ids: str
+    # deezer_user_id: str
+    # deezer_playlist_ids: str

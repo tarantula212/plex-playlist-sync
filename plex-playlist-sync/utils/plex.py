@@ -1,22 +1,24 @@
 import csv
 import re
-import logging
 import pathlib
-import sys
 from difflib import SequenceMatcher
 from typing import List
 
 import plexapi
 from plexapi.exceptions import BadRequest, NotFound
 from plexapi.server import PlexServer
-import json
+from plexapi.audio import Track as PlexTrack
+
 import os
 
+from .logger import setup_logger
 from .helperClasses import Playlist, Track, UserInputs
+from .playlistData import PlaylistDataHelper, TrackData
 
-logging.basicConfig(stream=sys.stdout, level=logging.INFO)
+logging = setup_logger(name="Plex")
 
-def _write_csv(tracks: List[Track], name: str, path: str = "/config/data") -> None:
+
+def _write_csv(tracks: List[Track], name: str, path: str) -> None:
     """Write given tracks with given name as a csv.
 
     Args:
@@ -34,12 +36,10 @@ def _write_csv(tracks: List[Track], name: str, path: str = "/config/data") -> No
         writer = csv.writer(csvfile)
         writer.writerow(Track.__annotations__.keys())
         for track in tracks:
-            writer.writerow(
-                [track.title, track.artist, track.album, track.url]
-            )
+            writer.writerow([track.title, track.artist, track.album, track.url])
 
 
-def _delete_csv(name: str, path: str = "/config/data") -> None:
+def _delete_csv(name: str, path: str) -> None:
     """Delete file associated with given name
 
     Args:
@@ -50,32 +50,77 @@ def _delete_csv(name: str, path: str = "/config/data") -> None:
     file = data_folder / f"{name}.csv"
     file.unlink()
 
+
+def _clean(str):
+    # Replace all special characters with a space
+    clean_str = re.sub(r"[^a-zA-Z0-9]", " ", str)
+    # Replace multiple spaces with a single space
+    clean_str = re.sub(r"\s+", " ", clean_str).strip()
+    return clean_str
+
+
 def _clean_album_name(album: str) -> str:
     """Clean the album name by removing specified phrases in any case and bracketed."""
-    print("Clean album name", album)
-
     # Remove phrases
     phrases_to_remove = [
-        'original motion picture soundtrack',
-        'deluxe edition',
+        "original motion picture soundtrack",
+        "soundtrack from the netflix series",
+        "deluxe edition",
+        "dialogues version",
     ]
     for phrase in phrases_to_remove:
-        album = re.sub(r'\(?\s*' + re.escape(phrase) + r'\s*\)?', '', album, flags=re.IGNORECASE).strip()
+        album = re.sub(
+            r"\(?\s*" + re.escape(phrase) + r"\s*\)?", "", album, flags=re.IGNORECASE
+        ).strip()
 
     # Replace words
     words_to_replace = [
-        ['&', 'And'],
-        ['-', ''],
-        ['(', ''],
-        [')', ''],
+        ["&", "And"],
+        ["-", ""],
+        ["(", ""],
+        [")", ""],
     ]
     for word_pair in words_to_replace:  # Changed variable name for clarity
         album = album.replace(word_pair[0], word_pair[1]).strip()
 
-    return album
+    return _clean(album)
 
 
-def _get_available_plex_tracks(plex: PlexServer, tracks: List[Track]) -> List:
+def _unique_strings(arr):
+    return list(set(arr))
+
+
+def _plex_track_search(plex_music_library, track_data: TrackData):
+    search_strs = _unique_strings(track_data.plex_search)
+    search = []
+    for item in search_strs:
+        title = item.strip()
+        try:
+            logging.debug(f"Plex Search - (title={title})")
+            search += plex_music_library.search(title=title, libtype="track", limit=30)
+        except BadRequest:
+            logging.info("failed to search title '%s' on plex", title)
+
+    logging.debug(f"Search Result Count - {str(len(search))}")
+    for s in search:
+        logging.debug(
+            f"* (title={s.title}) (album={s.album().title}) (artist={s.artist().title})"
+        )
+
+    return search
+
+
+def _find_spotdl_track(plex_track: PlexTrack) -> bool:
+    for media in plex_track.media:
+        for part in media.parts:
+            if "spotdl" in part.file.lower():
+                return True
+    return False
+
+
+def _get_available_plex_tracks(
+    plex: PlexServer, tracks: List[Track], playlist: Playlist, config_dir: str
+) -> List:
     """Search and return list of tracks available in plex.
 
     Args:
@@ -85,67 +130,92 @@ def _get_available_plex_tracks(plex: PlexServer, tracks: List[Track]) -> List:
     Returns:
         List: of plex track objects
     """
-    plex_tracks, missing_tracks = [], []
-    for count, track in enumerate(tracks, start=1):  # Added count
-        logging.info("Processing track %d of %d: %s (Album: %s)", count, len(tracks), track.title, track.album)  # Log the track title and count
-        try:
-            search = plex.search(track.title, mediatype="track", limit=5)
-        except BadRequest:
-            logging.info("failed to search title '%s' on plex", track.title)
-        if track.original_title != track.title:
-            original_title = track.original_title
-            logging.info("retrying search with original title '%s'", original_title)
-            try:
-                search += plex.search(
-                    original_title, mediatype="track", limit=5
-                )
-                logging.info("search for %s successful", original_title)
-            except BadRequest:
-                logging.info("failed to search for original title '%s' on plex", original_title)
+    playlist_data_helper = PlaylistDataHelper(os.path.join(config_dir, "data"))
+    playlist_data_helper.load(playlist)
 
-        print("Search Result Count - ", len(search))
+    plex_music_library = plex.library.section("Music")
+    plex_tracks, missing_tracks = [], []
+
+    tracks_data = []
+    for count, track in enumerate(tracks, start=1):  # Added count
+        logging.info(
+            "Processing track %d of %d: %s (Album: %s)",
+            count,
+            len(tracks),
+            track.title,
+            track.album,
+        )  # Log the track title and count
+
+        track_data = playlist_data_helper.get_track_data(track) or TrackData(
+            number=count,
+            title=track.title,
+            original_title=track.original_title,
+            artist=track.artist,
+            album=track.album,
+            original_album=track.original_album,
+            url=track.url,
+            plex_search=_unique_strings([track.title, track.original_title]),
+            status="missing",
+            spotdl=False,
+        )
+
+        track_album_name = _clean_album_name(track_data.album)
+        track_original_album_name = _clean_album_name(track_data.original_album)
+
+        search = _plex_track_search(plex_music_library, track_data)
         found = False
+        plex_track = None
         if search:
             for s in search:
                 try:
-                    artist_similarity = SequenceMatcher(
-                        None, s.artist().title.lower(), track.artist.lower()
-                    ).quick_ratio()
-                    logging.info("=> Artist Similarity - (Plex: %s, Track: %s) - %f", s.artist().title, track.artist, artist_similarity)
-
-                    if artist_similarity >= 0.9:
-                        logging.info("++++++ Adding Track: %s", track.title)
-                        plex_tracks.extend(s)
-                        found = True
-                        break
-                    
                     plex_album_name = _clean_album_name(s.album().title)
-                    
+
                     # Match with album name
-                    track_album_name = _clean_album_name(track.album)
                     album_similarity = SequenceMatcher(
                         None, plex_album_name.lower(), track_album_name.lower()
                     ).quick_ratio()
-                    logging.info("=> Album Similarity - (Plex: %s, Track: %s) - %f", plex_album_name, track_album_name, album_similarity)
+                    logging.debug(
+                        "Album Similarity - (Plex: %s, Track: %s) - %f",
+                        plex_album_name,
+                        track_album_name,
+                        album_similarity,
+                    )
 
                     if album_similarity >= 0.9:
-                        logging.info("++++++++ Adding Track: %s", track.title)
+                        logging.success("Adding Track: %s", track.title)
                         plex_tracks.extend(s)
                         found = True
+                        plex_track = s
                         break
 
                     # Match with original album name
-                    track_original_album_name = _clean_album_name(track.original_album)
                     album_similarity = SequenceMatcher(
                         None, plex_album_name.lower(), track_original_album_name.lower()
                     ).quick_ratio()
-                    logging.info("=> Album Similarity - (Plex: %s, Track: %s) - %f", plex_album_name, track_original_album_name, album_similarity)
+                    logging.debug(
+                        "Album Similarity - (Plex: %s, Track: %s) - %f",
+                        plex_album_name,
+                        track_original_album_name,
+                        album_similarity,
+                    )
 
                     if album_similarity >= 0.9:
-                        logging.info("++++++++ Adding Track: %s", track.title)
+                        logging.success("Adding Track: %s", track.title)
                         plex_tracks.extend(s)
+                        plex_track = s
                         found = True
                         break
+
+                    # artist_similarity = SequenceMatcher(
+                    #     None, s.artist().title.lower(), track.artist.lower()
+                    # ).quick_ratio()
+                    # logging.debug("=> Artist Similarity - (Plex: %s, Track: %s) - %f", s.artist().title, track.artist, artist_similarity)
+
+                    # if artist_similarity >= 0.9:
+                    #     logging.success("Adding Track: %s", track.title)
+                    #     plex_tracks.extend(s)
+                    #     found = True
+                    #     break
 
                 except IndexError:
                     logging.info(
@@ -156,6 +226,13 @@ def _get_available_plex_tracks(plex: PlexServer, tracks: List[Track]) -> List:
         if not found:
             logging.error("Missing: %s (Album: '%s')", track.title, track.album)
             missing_tracks.append(track)
+
+        track_data.spotdl = _find_spotdl_track(plex_track) if plex_track else False
+        track_data.status = "found" if found else "missing"
+        tracks_data.append(track_data)
+
+    playlist_data_helper.update_tracks(tracks_data)
+    playlist_data_helper.save()
 
     return plex_tracks, missing_tracks
 
@@ -197,7 +274,9 @@ def update_or_create_plex_playlist(
         available_tracks (List): List of plex.audio.track objects
         playlist (Playlist): Playlist object
     """
-    available_tracks, missing_tracks = _get_available_plex_tracks(plex, tracks)
+    available_tracks, missing_tracks = _get_available_plex_tracks(
+        plex, tracks, playlist, userInputs.config_dir
+    )
     logging.info("(Total: %d, Missing: %d)", len(tracks), len(missing_tracks))
 
     admin_user = plex.myPlexAccount().username
@@ -215,7 +294,7 @@ def update_or_create_plex_playlist(
     # sync playlist for other users
     users = _get_users_list(plex, userInputs.plex_users)
     for user in users:
-        if user == admin_user: # already synced before
+        if user == admin_user:  # already synced before
             continue
 
         logging.info("Syncing Playlist for user %s", user)
@@ -231,20 +310,20 @@ def update_or_create_plex_playlist(
         except Exception as e:
             logging.info("Error while sync Playlist %s", e)
 
+    csv_dir = os.path.join(userInputs.config_dir, "data")
     if missing_tracks and userInputs.write_missing_as_csv:
         try:
-            _write_csv(missing_tracks, playlist.name)
+            _write_csv(missing_tracks, playlist.name, csv_dir)
             logging.info("Missing tracks written to %s.csv", playlist.name)
         except:
             logging.info(
-                "Failed to write missing tracks for %s, likely permission"
-                " issue",
+                "Failed to write missing tracks for %s, likely permission" " issue",
                 playlist.name,
             )
     if (not missing_tracks) and userInputs.write_missing_as_csv:
         try:
             # Delete playlist created in prev run if no tracks are missing now
-            _delete_csv(playlist.name)
+            _delete_csv(playlist.name, csv_dir)
             logging.info("Deleted old %s.csv", playlist.name)
         except:
             logging.info(
@@ -253,8 +332,9 @@ def update_or_create_plex_playlist(
             )
 
     return missing_tracks
-    
-def _get_users_list(plex: PlexServer, users: str) -> List[str]:
+
+
+def _get_users_list(plex: PlexServer, users: List[str]) -> List[str]:
     """Get list of users from Plex.
 
     Args:
@@ -266,8 +346,8 @@ def _get_users_list(plex: PlexServer, users: str) -> List[str]:
     """
     account = plex.myPlexAccount()
     users_list = []
-    input_users = users.split(',')
-    if 'all' in input_users:
+    input_users = users
+    if "all" in input_users:
         for user in account.users():
             users_list.append(user.username)
     else:
@@ -275,6 +355,7 @@ def _get_users_list(plex: PlexServer, users: str) -> List[str]:
             users_list.append(user)
 
     return users_list
+
 
 def _update_or_create_user_plex_playlist(
     plex: PlexServer,
@@ -309,12 +390,8 @@ def _update_or_create_user_plex_playlist(
             try:
                 plex_playlist.uploadPoster(url=playlist.poster)
             except:
-                logging.info(
-                    "Failed to update poster for playlist %s", playlist.name
-                )
-        logging.info(
-            "Updated playlist %s with summary and poster", playlist.name
-        )
+                logging.info("Failed to update poster for playlist %s", playlist.name)
+        logging.info("Updated playlist %s with summary and poster", playlist.name)
 
     else:
         logging.info(
@@ -322,4 +399,3 @@ def _update_or_create_user_plex_playlist(
             " playlist creation",
             playlist.name,
         )
-

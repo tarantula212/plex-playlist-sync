@@ -1,4 +1,3 @@
-import logging
 from typing import List
 
 from plexapi.server import PlexServer
@@ -7,6 +6,9 @@ import deezer
 
 from .helperClasses import Playlist, Track, UserInputs
 from .plex import update_or_create_plex_playlist
+from .logger import setup_logger
+
+logging = setup_logger(name="Deezer")
 
 
 def _get_dz_playlists(
@@ -34,8 +36,7 @@ def _get_dz_playlists(
         except:
             dz_user_playlists = []
             logging.info(
-                "Can't get playlists from this user, skipping deezer user"
-                " playlists"
+                "Can't get playlists from this user, skipping deezer user" " playlists"
             )
 
     if userInputs.deezer_playlist_ids:

@@ -1,5 +1,6 @@
-import logging
 import re
+import json
+
 from typing import List
 
 import spotipy
@@ -7,8 +8,11 @@ from plexapi.server import PlexServer
 
 from .helperClasses import Playlist, Track, UserInputs
 from .plex import update_or_create_plex_playlist
+from .logger import setup_logger
 
 from .spotdl import SpotDL
+
+logging = setup_logger(name="Spotify")
 
 
 def _get_sp_user_playlists(
@@ -43,23 +47,68 @@ def _get_sp_user_playlists(
         logging.error("Spotify User ID Error")
     return playlists
 
+
+def _get_sp_global_playlists(
+    sp: spotipy.Spotify, playlist_ids: List[str], suffix: str = " - Spotify"
+) -> List[Playlist]:
+    """Get metadata for playlists in the given user_id.
+
+    Args:
+        sp (spotipy.Spotify): Spotify configured instance
+        userId (str): UserId of the spotify account (get it from open.spotify.com/account)
+        suffix (str): Identifier for source
+    Returns:
+        List[Playlist]: list of Playlist objects with playlist metadata fields
+    """
+    playlists = []
+    count = 0
+    total = len(playlist_ids)
+    for playlist_id in playlist_ids:
+        count += 1
+        logging.info(f"({count}/{total}) - Fetching Spotify Playlist ID: {playlist_id}")
+        try:
+            sp_playlist = sp.playlist(playlist_id)
+            playlist = Playlist(
+                id=sp_playlist["uri"],
+                name=sp_playlist["name"] + suffix,
+                description=sp_playlist.get("description", ""),
+                # playlists may not have a poster in such cases return ""
+                poster=""
+                if len(sp_playlist["images"]) == 0
+                else sp_playlist["images"][0].get("url", ""),
+            )
+            playlists.append(playlist)
+            logging.success(json.dumps(playlist.__dict__, indent=4))
+        except:
+            logging.warning("Spotify Playlist ID error:", playlist_id)
+
+    return playlists
+
+
 def _cleanup_title(title: str) -> str:
-    title_match = re.search(r'^(.*?) (?:\(From|- From|\(Feat\.)', title, re.IGNORECASE)  
+    title_match = re.search(r"^(.*?) (?:\(From|- From|\(Feat\.)", title, re.IGNORECASE)
     return title_match.group(1).strip() if title_match else title
 
+
 def _cleanup_album_name(album: str) -> str:
-    album_match = re.search(r'\(From "(.*?)"\)|- From "(.*?)"', album, re.IGNORECASE)  # Updated regex to handle both cases
-    return (album_match.group(1) or album_match.group(2)) if album_match else album
+    album_match = re.search(
+        r'\(From "(.*?)"\)|- From "(.*?)"', album, re.IGNORECASE
+    )  # Updated regex to handle both cases
+
+    album = (album_match.group(1) or album_match.group(2)) if album_match else album
+
+    album = re.sub(r"\(feat\.\s*.*?\)", "", album, re.IGNORECASE)
+
+    return album.strip()
 
 
 def _get_sp_tracks_from_playlist(
-    sp: spotipy.Spotify, user_id: str, playlist: Playlist
+    sp: spotipy.Spotify, playlist: Playlist
 ) -> List[Track]:
     """Return list of tracks with metadata.
 
     Args:
         sp (spotipy.Spotify): Spotify configured instance
-        user_id (str): spotify user id
         playlist (Playlist): Playlist object
     Returns:
         List[Track]: list of Track objects with track metadata fields
@@ -82,7 +131,7 @@ def _get_sp_tracks_from_playlist(
 
         return Track(title, original_title, artist, album, original_album, url)
 
-    sp_playlist_tracks = sp.user_playlist_tracks(user_id, playlist.id)
+    sp_playlist_tracks = sp.playlist_tracks(playlist.id)
 
     # Only processes first 100 tracks
     tracks = list(
@@ -116,29 +165,26 @@ def spotify_playlist_sync(
         user_id (str): spotify user id
         plex (PlexServer): A configured PlexServer instance
     """
-    playlists = _get_sp_user_playlists(
+    # user_playlists = _get_sp_user_playlists(
+    #     sp,
+    #     userInputs.spotify_user_id,
+    #     userInputs.spotify_playlist_ids,
+    #     " - Spotify" if userInputs.append_service_suffix else "",
+    # )
+    spotify_playists = _get_sp_global_playlists(
         sp,
-        userInputs.spotify_user_id,
+        userInputs.spotify_playlist_ids,
         " - Spotify" if userInputs.append_service_suffix else "",
     )
-
+    playlists = spotify_playists
     spotdl = SpotDL(userInputs.spotdl_dir, userInputs.download_missing_tracks_dir)
-    playlists_filter = [
-        "Top 50 - India - Spotify", 
-        "Hot Hits Hindi - Spotify", 
-        "Trending Now India - Spotify",
-        "Discover Weekly - Spotify"
-    ]
-
     downloaded = False
     if playlists:
         for playlist in playlists:
-            if playlist.name not in playlists_filter:
-                continue
-            tracks = _get_sp_tracks_from_playlist(
-                sp, userInputs.spotify_user_id, playlist
+            tracks = _get_sp_tracks_from_playlist(sp, playlist)
+            missing_tracks = update_or_create_plex_playlist(
+                plex, playlist, tracks, userInputs
             )
-            missing_tracks = update_or_create_plex_playlist(plex, playlist, tracks, userInputs)
             if missing_tracks and userInputs.download_missing_tracks:
                 spotdl.download_tracks(missing_tracks)
                 downloaded = True
@@ -148,7 +194,6 @@ def spotify_playlist_sync(
             librarySection = plex.library.section("Music")
             # scan for new media
             librarySection.update()
-
 
     else:
         logging.error("No spotify playlists found for given user")
