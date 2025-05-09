@@ -119,7 +119,7 @@ def _find_spotdl_track(plex_track: PlexTrack) -> bool:
 
 
 def _get_available_plex_tracks(
-    plex: PlexServer, tracks: List[Track], playlist: Playlist, config_dir: str
+    plex: PlexServer, playlist: Playlist, config_dir: str
 ) -> List:
     """Search and return list of tracks available in plex.
 
@@ -137,11 +137,11 @@ def _get_available_plex_tracks(
     plex_tracks, missing_tracks = [], []
 
     tracks_data = []
-    for count, track in enumerate(tracks, start=1):  # Added count
+    for count, track in enumerate(playlist.tracks, start=1):  # Added count
         logging.info(
             "Processing track %d of %d: %s (Album: %s)",
             count,
-            len(tracks),
+            len(playlist.tracks),
             track.title,
             track.album,
         )  # Log the track title and count
@@ -264,7 +264,6 @@ def _update_plex_playlist(
 def update_or_create_plex_playlist(
     plex: PlexServer,
     playlist: Playlist,
-    tracks: List[Track],
     userInputs: UserInputs,
 ) -> List[Track]:
     """Update playlist if exists, else create a new playlist.
@@ -274,8 +273,10 @@ def update_or_create_plex_playlist(
         available_tracks (List): List of plex.audio.track objects
         playlist (Playlist): Playlist object
     """
+    tracks = playlist.tracks
+
     available_tracks, missing_tracks = _get_available_plex_tracks(
-        plex, tracks, playlist, userInputs.config_dir
+        plex, playlist, userInputs.config_dir
     )
     logging.info("(Total: %d, Missing: %d)", len(tracks), len(missing_tracks))
 
@@ -317,7 +318,7 @@ def update_or_create_plex_playlist(
             logging.info("Missing tracks written to %s.csv", playlist.name)
         except:
             logging.info(
-                "Failed to write missing tracks for %s, likely permission" " issue",
+                "Failed to write missing tracks for %s, likely permission issue",
                 playlist.name,
             )
     if (not missing_tracks) and userInputs.write_missing_as_csv:

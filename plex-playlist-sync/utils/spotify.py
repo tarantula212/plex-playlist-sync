@@ -15,6 +15,17 @@ from .spotdl import SpotDL
 logging = setup_logger(name="Spotify")
 
 
+def _get_poster_url(images: List[dict]) -> str:
+    """Get the first image URL from the list of images.
+
+    Args:
+        images (List[dict]): List of image dictionaries
+    Returns:
+        str: URL of the first image or empty string if no images are available
+    """
+    return images[0].get("url", "") if len(images) > 0 else ""
+
+
 def _get_sp_user_playlists(
     sp: spotipy.Spotify, user_id: str, suffix: str = " - Spotify"
 ) -> List[Playlist]:
@@ -31,18 +42,17 @@ def _get_sp_user_playlists(
 
     try:
         sp_playlists = sp.user_playlists(user_id)
-        for playlist in sp_playlists["items"]:
-            playlists.append(
-                Playlist(
-                    id=playlist["uri"],
-                    name=playlist["name"] + suffix,
-                    description=playlist.get("description", ""),
-                    # playlists may not have a poster in such cases return ""
-                    poster=""
-                    if len(playlist["images"]) == 0
-                    else playlist["images"][0].get("url", ""),
-                )
+        for sp_playlist in sp_playlists["items"]:
+            playlist = Playlist(
+                id=sp_playlist["uri"],
+                name=sp_playlist["name"] + suffix,
+                description=sp_playlist.get("description", ""),
+                # playlists may not have a poster in such cases return ""
+                poster=_get_poster_url(sp_playlist["images"]),
+                tracks=[],
             )
+            playlist.tracks = _get_sp_tracks_from_playlist(sp, playlist)
+            playlists.append()
     except:
         logging.error("Spotify User ID Error")
     return playlists
@@ -73,10 +83,9 @@ def _get_sp_global_playlists(
                 name=sp_playlist["name"] + suffix,
                 description=sp_playlist.get("description", ""),
                 # playlists may not have a poster in such cases return ""
-                poster=""
-                if len(sp_playlist["images"]) == 0
-                else sp_playlist["images"][0].get("url", ""),
+                poster=_get_poster_url(sp_playlist["images"]),
             )
+            playlist.tracks = _get_sp_tracks_from_playlist(sp, playlist)
             playlists.append(playlist)
             logging.success(json.dumps(playlist.__dict__, indent=4))
         except:
@@ -162,7 +171,6 @@ def spotify_playlist_sync(
 
     Args:
         sp (spotipy.Spotify): Spotify configured instance
-        user_id (str): spotify user id
         plex (PlexServer): A configured PlexServer instance
     """
     # user_playlists = _get_sp_user_playlists(
@@ -176,24 +184,25 @@ def spotify_playlist_sync(
         userInputs.spotify_playlist_ids,
         " - Spotify" if userInputs.append_service_suffix else "",
     )
+
+    if not spotify_playists:
+        logging.error("No Spotify playlists found")
+        return
+
     playlists = spotify_playists
     spotdl = SpotDL(userInputs.spotdl_dir, userInputs.download_missing_tracks_dir)
     downloaded = False
-    if playlists:
-        for playlist in playlists:
-            tracks = _get_sp_tracks_from_playlist(sp, playlist)
-            missing_tracks = update_or_create_plex_playlist(
-                plex, playlist, tracks, userInputs
-            )
-            if missing_tracks and userInputs.download_missing_tracks:
-                spotdl.download_tracks(missing_tracks)
-                downloaded = True
 
-        # refresh plex to scan for downloaded tracks
-        if downloaded:
-            librarySection = plex.library.section("Music")
-            # scan for new media
-            librarySection.update()
+    for playlist in playlists:
+        missing_tracks = update_or_create_plex_playlist(
+            plex, playlist, playlist.tracks, userInputs
+        )
+        if missing_tracks and userInputs.download_missing_tracks:
+            spotdl.download_tracks(missing_tracks)
+            downloaded = True
 
-    else:
-        logging.error("No spotify playlists found for given user")
+    # refresh plex to scan for downloaded tracks
+    if downloaded:
+        librarySection = plex.library.section("Music")
+        # scan for new media
+        librarySection.update()

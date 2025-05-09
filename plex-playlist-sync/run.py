@@ -1,15 +1,21 @@
 import os
 import time
 
-import spotipy
 import yaml
+import json
 
+import spotipy
 from spotipy_anon import SpotifyAnon
+
+from ytmusicapi import YTMusic, OAuthCredentials
+
 from plexapi.server import PlexServer
 
 from utils.helperClasses import UserInputs
 from utils.logger import setup_logger
+
 from utils.spotify import spotify_playlist_sync
+from utils.ytmusic import ytmusic_playlist_sync
 
 logging = setup_logger(name="Run")
 
@@ -42,31 +48,22 @@ def get_config():
         append_instead_of_sync=config.get("APPEND_INSTEAD_OF_SYNC", False),
         wait_seconds=config.get("SECONDS_TO_WAIT", 86400),
         # spotify config
+        spotify_sync_enabled=config.get("SPOTIFY_SYNC_ENABLED", True),
         spotipy_client_id=config.get("SPOTIFY_CLIENT_ID"),
         spotipy_client_secret=config.get("SPOTIFY_CLIENT_SECRET"),
         spotify_user_id=config.get("SPOTIFY_USER_ID"),
         spotify_playlist_ids=config.get("SPOTIFY_PLAYLIST_IDS", []),
+        # ytmusic config
+        ytmusic_sync_enabled=config.get("YTMUSIC_SYNC_ENABLED", True),
+        ytmusic_client_id=config.get("YTMUSIC_CLIENT_ID"),
+        ytmusic_client_secret=config.get("YTMUSIC_CLIENT_SECRET"),
+        ytmusic_playlist_ids=config.get("YTMUSIC_PLAYLIST_IDS", []),
     )
 
     return userInputs
 
 
-while True:
-    logging.info("Starting playlist sync")
-    userInputs = get_config()
-
-    if userInputs.plex_url and userInputs.plex_token:
-        try:
-            plex = PlexServer(userInputs.plex_url, userInputs.plex_token)
-        except:
-            logging.error("Plex Authorization error")
-            break
-    else:
-        logging.error("Missing Plex Authorization Variables")
-        break
-
-    ########## SPOTIFY SYNC ##########
-
+def spotify_sync():
     logging.info("Starting Spotify playlist sync")
 
     SP_AUTHSUCCESS = False
@@ -84,8 +81,7 @@ while True:
 
     else:
         logging.info(
-            "Missing one or more Spotify Authorization Variables, skipping"
-            " spotify sync"
+            "Missing one or more Spotify Authorization Variables, skipping spotify sync"
         )
 
     if SP_AUTHSUCCESS:
@@ -93,14 +89,48 @@ while True:
 
     logging.info("Spotify playlist sync complete")
 
-    ########## DEEZER SYNC ##########
 
-    # logging.info("Starting Deezer playlist sync")
-    # dz = deezer.Client()
-    # deezer_playlist_sync(dz, plex, userInputs)
-    # logging.info("Deezer playlist sync complete")
+def ytmusic_sync():
+    logging.info("Starting YTMusic playlist sync")
 
-    # logging.info("All playlist(s) sync complete")
-    # logging.info("sleeping for %s seconds" % userInputs.wait_seconds)
+    config_dir = os.getenv("CONFIG_DIR", "/config")
+
+    # Load configuration from config.yaml
+    oauth_path = os.path.join(config_dir, "ytmusic_oauth.json")
+
+    yt = YTMusic(
+        oauth_path,
+        oauth_credentials=OAuthCredentials(
+            client_id=userInputs.ytmusic_client_id,
+            client_secret=userInputs.ytmusic_client_secret,
+        ),
+    )
+
+    ytmusic_playlist_sync(yt, plex, userInputs)
+
+    logging.info("YTMusic playlist sync complete")
+
+
+while True:
+    logging.info("Starting playlist sync")
+    userInputs = get_config()
+
+    if userInputs.plex_url and userInputs.plex_token:
+        try:
+            plex = PlexServer(userInputs.plex_url, userInputs.plex_token)
+        except:
+            logging.error("Plex Authorization error")
+            break
+    else:
+        logging.error("Missing Plex Authorization Variables")
+        break
+
+    ########## SPOTIFY SYNC ##########
+    if userInputs.spotify_sync_enabled:
+        spotify_sync()
+
+    ########## YT-MUSIC SYNC ##########
+    if userInputs.ytmusic_sync_enabled:
+        ytmusic_sync()
 
     time.sleep(userInputs.wait_seconds)
