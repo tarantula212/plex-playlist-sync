@@ -103,7 +103,7 @@ def _get_global_playlists(
             yt_playlist = yt.get_playlist(playlist_id)
 
             playlist = Playlist(
-                id=f"ytmusic:playlist:{yt_playlist['id']}",
+                id=f"ytmusic:playlist:{playlist_id}",
                 name=yt_playlist["title"] + suffix,
                 description=yt_playlist.get("description", ""),
                 poster=_get_poster_url(yt_playlist["thumbnails"]),
