@@ -157,19 +157,24 @@ def _get_available_plex_tracks(
             url=track.url,
             plex_search=_unique_strings([track.title, track.original_title]),
             status="missing",
+            alternate_titles=[],
+            alternate_albums=[],
             spotdl=False,
         )
 
+        # override some track data fields
         track_data.number = count
         track_data.title = track.title
-        track_data.original_title=track.original_title,
+        track_data.original_title=track.original_title
         track_data.artist = track.artist
         track_data.album = track.album
         track_data.original_album = track.original_album
-        track_data.plex_search = _unique_strings([track.title, track.original_title] + track_data.plex_search)
+        track_data.plex_search = _unique_strings([track.title, track.original_title] + track_data.alternate_titles + track_data.plex_search)
 
         track_album_name = _clean_album_name(track_data.album)
         track_original_album_name = _clean_album_name(track_data.original_album)
+        track_alternate_album_names = [ _clean_album_name(album) for album in track_data.alternate_albums]
+
 
         search = _plex_track_search(plex_music_library, track_data)
         found = False
@@ -178,53 +183,29 @@ def _get_available_plex_tracks(
             for s in search:
                 try:
                     plex_album_name = _clean_album_name(s.album().title)
-
-                    # Match with album name
-                    album_similarity = SequenceMatcher(
-                        None, plex_album_name.lower(), track_album_name.lower()
-                    ).quick_ratio()
-                    logging.debug(
-                        "Album Similarity - (Plex: %s, Track: %s) - %f",
-                        plex_album_name,
+                    album_names = _unique_strings([
                         track_album_name,
-                        album_similarity,
-                    )
-
-                    if album_similarity >= 0.9:
-                        logging.success("Adding Track: %s", track.title)
-                        plex_tracks.extend(s)
-                        found = True
-                        plex_track = s
-                        break
-
-                    # Match with original album name
-                    album_similarity = SequenceMatcher(
-                        None, plex_album_name.lower(), track_original_album_name.lower()
-                    ).quick_ratio()
-                    logging.debug(
-                        "Album Similarity - (Plex: %s, Track: %s) - %f",
-                        plex_album_name,
                         track_original_album_name,
-                        album_similarity,
-                    )
+                    ] + track_alternate_album_names)
+                    
+                    for album_name in album_names:
+                        album_similarity = SequenceMatcher(
+                            None, plex_album_name.lower(), album_name.lower()
+                        ).quick_ratio()
+                        logging.debug(
+                            "Album Similarity - (Plex: %s, Track: %s) - %f",
+                            plex_album_name,
+                            track_album_name,
+                            album_similarity,
+                        )
 
-                    if album_similarity >= 0.9:
-                        logging.success("Adding Track: %s", track.title)
-                        plex_tracks.extend(s)
-                        plex_track = s
-                        found = True
-                        break
+                        if album_similarity >= 0.9:
+                            logging.success("Adding Track: %s", track.title)
+                            plex_tracks.extend(s)
+                            found = True
+                            plex_track = s
+                            break
 
-                    # artist_similarity = SequenceMatcher(
-                    #     None, s.artist().title.lower(), track.artist.lower()
-                    # ).quick_ratio()
-                    # logging.debug("=> Artist Similarity - (Plex: %s, Track: %s) - %f", s.artist().title, track.artist, artist_similarity)
-
-                    # if artist_similarity >= 0.9:
-                    #     logging.success("Adding Track: %s", track.title)
-                    #     plex_tracks.extend(s)
-                    #     found = True
-                    #     break
 
                 except IndexError:
                     logging.info(

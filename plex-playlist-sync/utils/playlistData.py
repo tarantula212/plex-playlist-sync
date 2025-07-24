@@ -14,9 +14,11 @@ class TrackData:
     number: int
     title: str
     original_title: str
+    alternate_titles: List[str]
     artist: str
     album: str
     original_album: str
+    alternate_albums: List[str]
     url: str
     plex_search: List[str]
     status: str
@@ -42,9 +44,11 @@ class PlaylistData:
                 number=track["number"],
                 title=track.get("title", ""),
                 original_title=track.get("original_title", ""),
+                alternate_titles=track.get("alternate_titles", []),
                 artist=track.get("artist", ""),
                 album=track.get("album", ""),
-                original_album=track["original_album"],
+                original_album=track.get("original_album", ""),
+                alternate_albums=track.get("alternate_albums", []),
                 url=track.get("url", ""),
                 plex_search=track.get("plex_search", []),
                 status=track.get("status", ""),
