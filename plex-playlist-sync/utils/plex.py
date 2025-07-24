@@ -160,6 +160,14 @@ def _get_available_plex_tracks(
             spotdl=False,
         )
 
+        track_data.number = count
+        track_data.title = track.title
+        track_data.original_title=track.original_title,
+        track_data.artist = track.artist
+        track_data.album = track.album
+        track_data.original_album = track.original_album
+        track_data.plex_search = _unique_strings([track.title, track.original_title] + track_data.plex_search)
+
         track_album_name = _clean_album_name(track_data.album)
         track_original_album_name = _clean_album_name(track_data.original_album)
 
