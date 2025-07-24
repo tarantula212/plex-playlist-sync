@@ -67,6 +67,7 @@ def _clean_album_name(album: str) -> str:
         "soundtrack from the netflix series",
         "deluxe edition",
         "dialogues version",
+        "- EP",
     ]
     for phrase in phrases_to_remove:
         album = re.sub(
