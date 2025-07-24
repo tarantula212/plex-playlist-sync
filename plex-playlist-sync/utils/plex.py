@@ -92,7 +92,7 @@ def _unique_strings(arr):
 
 
 def _plex_track_search(plex_music_library, track_data: TrackData):
-    search_strs = _unique_strings(track_data.plex_search)
+    search_strs = [f"{track_data.title} - {track_data.album}"] + _unique_strings(track_data.plex_search)
     search = []
     for item in search_strs:
         title = item.strip()
