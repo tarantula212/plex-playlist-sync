@@ -12,7 +12,7 @@ from .logger import setup_logger
 
 from .spotdl import SpotDL
 
-logging = setup_logger(name="Spotify")
+logging = setup_logger(name="YTMusic")
 
 
 def _get_tracks(yt_tracks) -> List[Track]:
