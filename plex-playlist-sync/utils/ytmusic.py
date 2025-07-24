@@ -118,7 +118,7 @@ def _get_global_playlists(
 
 
 def _cleanup_title(title: str) -> str:
-    title_match = re.search(r"^(.*?) (?:\(From|- From|\(Feat\.)", title, re.IGNORECASE)
+    title_match = re.search(r"^(.*?) (?:\(From|- From|\(Feat\.|\(Movie)", title, re.IGNORECASE)
     return title_match.group(1).strip() if title_match else title
 
 
