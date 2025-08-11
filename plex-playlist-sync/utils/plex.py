@@ -181,6 +181,9 @@ def _get_available_plex_tracks(
         plex_track = None
         if search:
             for s in search:
+                if found:
+                    break
+
                 try:
                     plex_album_name = _clean_album_name(s.album().title)
                     album_names = _unique_strings([
@@ -205,8 +208,6 @@ def _get_available_plex_tracks(
                             found = True
                             plex_track = s
                             break
-
-
                 except IndexError:
                     logging.info(
                         "Looks like plex mismatched the search for %s,"
