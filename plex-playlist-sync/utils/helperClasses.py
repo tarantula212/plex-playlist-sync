@@ -40,18 +40,6 @@ class UserInputs:
     append_instead_of_sync: bool
     wait_seconds: int
 
-    # spotify config
-    spotify_sync_enabled: bool
-    spotipy_client_id: str
-    spotipy_client_secret: str
-    spotify_user_id: str
-    spotify_playlist_ids: List[str]
-
     # ytmusic config
     ytmusic_sync_enabled: bool
-    ytmusic_client_id: str
-    ytmusic_client_secret: str
     ytmusic_playlist_ids: List[str]
-
-    # deezer_user_id: str
-    # deezer_playlist_ids: str

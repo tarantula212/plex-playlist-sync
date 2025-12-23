@@ -2,10 +2,9 @@ import os
 import time
 
 import yaml
-import json
 
-import spotipy
-from spotipy_anon import SpotifyAnon
+# import spotipy
+# from spotipy_anon import SpotifyAnon
 
 from ytmusicapi import YTMusic
 
@@ -14,7 +13,7 @@ from plexapi.server import PlexServer
 from utils.helperClasses import UserInputs
 from utils.logger import setup_logger
 
-from utils.spotify import spotify_playlist_sync
+# from utils.spotify import spotify_playlist_sync
 from utils.ytmusic import ytmusic_playlist_sync
 
 logging = setup_logger(name="Run")
@@ -47,12 +46,14 @@ def get_config():
         add_playlist_description=config.get("ADD_PLAYLIST_DESCRIPTION", True),
         append_instead_of_sync=config.get("APPEND_INSTEAD_OF_SYNC", False),
         wait_seconds=config.get("SECONDS_TO_WAIT", 86400),
+
         # spotify config
-        spotify_sync_enabled=config.get("SPOTIFY_SYNC_ENABLED", True),
-        spotipy_client_id=config.get("SPOTIFY_CLIENT_ID"),
-        spotipy_client_secret=config.get("SPOTIFY_CLIENT_SECRET"),
-        spotify_user_id=config.get("SPOTIFY_USER_ID"),
-        spotify_playlist_ids=config.get("SPOTIFY_PLAYLIST_IDS", []),
+        # spotify_sync_enabled=config.get("SPOTIFY_SYNC_ENABLED", True),
+        # spotipy_client_id=config.get("SPOTIFY_CLIENT_ID"),
+        # spotipy_client_secret=config.get("SPOTIFY_CLIENT_SECRET"),
+        # spotify_user_id=config.get("SPOTIFY_USER_ID"),
+        # spotify_playlist_ids=config.get("SPOTIFY_PLAYLIST_IDS", []),
+
         # ytmusic config
         ytmusic_sync_enabled=config.get("YTMUSIC_SYNC_ENABLED", True),
         ytmusic_playlist_ids=config.get("YTMUSIC_PLAYLIST_IDS", []),
@@ -61,31 +62,31 @@ def get_config():
     return userInputs
 
 
-def spotify_sync():
-    logging.info("Starting Spotify playlist sync")
+# def spotify_sync():
+#     logging.info("Starting Spotify playlist sync")
 
-    SP_AUTHSUCCESS = False
+#     SP_AUTHSUCCESS = False
 
-    if (
-        userInputs.spotipy_client_id
-        and userInputs.spotipy_client_secret
-        and userInputs.spotify_user_id
-    ):
-        try:
-            sp = spotipy.Spotify(auth_manager=SpotifyAnon())
-            SP_AUTHSUCCESS = True
-        except:
-            logging.info("Spotify Authorization error, skipping spotify sync")
+#     if (
+#         userInputs.spotipy_client_id
+#         and userInputs.spotipy_client_secret
+#         and userInputs.spotify_user_id
+#     ):
+#         try:
+#             sp = spotipy.Spotify(auth_manager=SpotifyAnon())
+#             SP_AUTHSUCCESS = True
+#         except:
+#             logging.info("Spotify Authorization error, skipping spotify sync")
 
-    else:
-        logging.info(
-            "Missing one or more Spotify Authorization Variables, skipping spotify sync"
-        )
+#     else:
+#         logging.info(
+#             "Missing one or more Spotify Authorization Variables, skipping spotify sync"
+#         )
 
-    if SP_AUTHSUCCESS:
-        spotify_playlist_sync(sp, plex, userInputs)
+#     if SP_AUTHSUCCESS:
+#         spotify_playlist_sync(sp, plex, userInputs)
 
-    logging.info("Spotify playlist sync complete")
+#     logging.info("Spotify playlist sync complete")
 
 
 def ytmusic_sync():
@@ -118,8 +119,8 @@ while True:
         break
 
     ########## SPOTIFY SYNC ##########
-    if userInputs.spotify_sync_enabled:
-        spotify_sync()
+    # if userInputs.spotify_sync_enabled:
+    #     spotify_sync()
 
     ########## YT-MUSIC SYNC ##########
     if userInputs.ytmusic_sync_enabled:
