@@ -7,7 +7,7 @@ import json
 import spotipy
 from spotipy_anon import SpotifyAnon
 
-from ytmusicapi import YTMusic, OAuthCredentials
+from ytmusicapi import YTMusic
 
 from plexapi.server import PlexServer
 
@@ -55,8 +55,6 @@ def get_config():
         spotify_playlist_ids=config.get("SPOTIFY_PLAYLIST_IDS", []),
         # ytmusic config
         ytmusic_sync_enabled=config.get("YTMUSIC_SYNC_ENABLED", True),
-        ytmusic_client_id=config.get("YTMUSIC_CLIENT_ID"),
-        ytmusic_client_secret=config.get("YTMUSIC_CLIENT_SECRET"),
         ytmusic_playlist_ids=config.get("YTMUSIC_PLAYLIST_IDS", []),
     )
 
@@ -96,15 +94,9 @@ def ytmusic_sync():
     config_dir = os.getenv("CONFIG_DIR", "/config")
 
     # Load configuration from config.yaml
-    oauth_path = os.path.join(config_dir, "ytmusic_oauth.json")
+    browser_auth_file_path = os.path.join(config_dir, "ytmusic_browser.json")
 
-    yt = YTMusic(
-        oauth_path,
-        oauth_credentials=OAuthCredentials(
-            client_id=userInputs.ytmusic_client_id,
-            client_secret=userInputs.ytmusic_client_secret,
-        ),
-    )
+    yt = YTMusic(browser_auth_file_path)
 
     ytmusic_playlist_sync(yt, plex, userInputs)
 
