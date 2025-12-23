@@ -9,7 +9,7 @@ from .helperClasses import Playlist, Track, UserInputs
 from .plex import update_or_create_plex_playlist
 from .logger import setup_logger
 
-from .spotdl import SpotDL
+# from .spotdl import SpotDL
 
 logging = setup_logger(name="YTMusic")
 
@@ -153,12 +153,12 @@ def ytmusic_playlist_sync(
         logging.error("No YTMusic playlists found")
         return
 
-    spotdl = SpotDL(userInputs.spotdl_dir, userInputs.download_missing_tracks_dir)
+    # spotdl = SpotDL(userInputs.spotdl_dir, userInputs.download_missing_tracks_dir)
     downloaded = False
     for playlist in playlists:
         missing_tracks = update_or_create_plex_playlist(plex, playlist, userInputs)
         if missing_tracks and userInputs.download_missing_tracks:
-            spotdl.download_tracks(missing_tracks)
+            # spotdl.download_tracks(missing_tracks)
             downloaded = True
 
     # refresh plex to scan for downloaded tracks
